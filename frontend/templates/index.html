@@ -1,0 +1,600 @@
+<!DOCTYPE html>
+<html lang="en" class="h-full bg-gray-950">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Credit Recourse Engine</title>
+
+  <!-- Tailwind CSS CDN -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          colors: {
+            brand: { 500: '#6366f1', 600: '#4f46e5', 700: '#4338ca' }
+          }
+        }
+      }
+    }
+  </script>
+
+  <!-- Alpine.js CDN -->
+  <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>
+
+  <!-- Chart.js CDN -->
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+
+  <style>
+    [x-cloak] { display: none !important; }
+    .zone-approve { background: linear-gradient(135deg, #14532d 0%, #166534 100%); border-color: #22c55e; }
+    .zone-grey    { background: linear-gradient(135deg, #78350f 0%, #92400e 100%); border-color: #f59e0b; }
+    .zone-deny    { background: linear-gradient(135deg, #7f1d1d 0%, #991b1b 100%); border-color: #ef4444; }
+    .card { @apply bg-gray-900 border border-gray-800 rounded-xl p-6; }
+    .input-field {
+      @apply w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2
+             text-white text-sm placeholder-gray-500 focus:outline-none
+             focus:ring-2 focus:ring-brand-500 focus:border-transparent
+             transition-colors;
+      color-scheme: dark;
+      -webkit-text-fill-color: #f9fafb;
+    }
+    /* Fix browser autofill/native override on inputs and selects */
+    input.input-field, select.input-field {
+      color: #f9fafb !important;
+      background-color: #1f2937 !important;
+    }
+    input.input-field::placeholder { color: #6b7280; }
+    select.input-field option { background-color: #1f2937; color: #f9fafb; }
+    .btn-primary {
+      @apply bg-brand-600 hover:bg-brand-700 text-white font-semibold
+             px-6 py-3 rounded-lg transition-colors disabled:opacity-50
+             disabled:cursor-not-allowed flex items-center gap-2;
+    }
+    .progress-bar {
+      height: 6px;
+      border-radius: 3px;
+      background: rgba(255,255,255,0.1);
+      overflow: hidden;
+    }
+    .progress-fill {
+      height: 100%;
+      border-radius: 3px;
+      transition: width 0.8s ease;
+    }
+    .step-card {
+      @apply bg-gray-800/50 border border-gray-700/50 rounded-lg p-4 mb-3;
+    }
+  </style>
+</head>
+
+<body class="h-full text-gray-100 font-sans" x-data="creditApp()" x-init="init()">
+
+  <!-- ── Header ──────────────────────────────────────────────────────────── -->
+  <header class="border-b border-gray-800 bg-gray-950/80 backdrop-blur sticky top-0 z-10">
+    <div class="max-w-7xl mx-auto px-6 py-4 flex items-center justify-between">
+      <div class="flex items-center gap-3">
+        <div class="w-8 h-8 bg-brand-600 rounded-lg flex items-center justify-center text-white font-bold text-sm">CR</div>
+        <div>
+          <h1 class="font-bold text-white text-lg leading-none">Credit Recourse Engine</h1>
+          <p class="text-gray-500 text-xs mt-0.5">4-layer decision intelligence pipeline</p>
+        </div>
+      </div>
+      <div class="flex items-center gap-2 text-xs">
+        <span x-show="modelStatus === 'loaded'"
+              class="flex items-center gap-1.5 text-green-400 bg-green-900/30 px-2.5 py-1 rounded-full border border-green-800">
+          <span class="w-1.5 h-1.5 bg-green-400 rounded-full"></span> Model ready
+        </span>
+        <span x-show="modelStatus === 'not_loaded'"
+              class="flex items-center gap-1.5 text-amber-400 bg-amber-900/30 px-2.5 py-1 rounded-full border border-amber-800">
+          <span class="w-1.5 h-1.5 bg-amber-400 rounded-full"></span> Train model first
+        </span>
+      </div>
+    </div>
+  </header>
+
+  <!-- ── Layout ─────────────────────────────────────────────────────────── -->
+  <main class="max-w-7xl mx-auto px-6 py-8 grid grid-cols-1 xl:grid-cols-3 gap-8">
+
+    <!-- ── Left: Input Form ──────────────────────────────────────────────── -->
+    <div class="xl:col-span-1 space-y-6">
+
+      <!-- Pipeline explainer -->
+      <div class="card">
+        <h2 class="text-sm font-semibold text-gray-400 uppercase tracking-wider mb-4">Pipeline</h2>
+        <div class="space-y-3">
+          <template x-for="(layer, i) in pipelineLayers" :key="i">
+            <div class="flex items-start gap-3">
+              <div class="w-6 h-6 rounded-full bg-brand-600/20 border border-brand-500/30 flex items-center justify-center text-brand-400 text-xs font-bold flex-shrink-0 mt-0.5"
+                   x-text="i + 1"></div>
+              <div>
+                <p class="text-white text-sm font-medium" x-text="layer.title"></p>
+                <p class="text-gray-500 text-xs mt-0.5" x-text="layer.desc"></p>
+              </div>
+            </div>
+          </template>
+        </div>
+      </div>
+
+      <!-- Applicant form -->
+      <div class="card">
+        <h2 class="text-sm font-semibold text-gray-400 uppercase tracking-wider mb-5">Applicant Profile</h2>
+
+        <form @submit.prevent="runPrediction()" class="space-y-4">
+
+          <!-- Financials -->
+          <div>
+            <p class="text-xs text-gray-500 font-medium uppercase tracking-wider mb-3">Financials</p>
+            <div class="grid grid-cols-2 gap-3">
+              <div>
+                <label class="text-xs text-gray-400 mb-1 block">Annual Income ($)</label>
+                <input type="number" x-model.number="form.AMT_INCOME_TOTAL" class="input-field" placeholder="135000" min="1" required />
+              </div>
+              <div>
+                <label class="text-xs text-gray-400 mb-1 block">Loan Amount ($)</label>
+                <input type="number" x-model.number="form.AMT_CREDIT" class="input-field" placeholder="400000" min="1" required />
+              </div>
+              <div>
+                <label class="text-xs text-gray-400 mb-1 block">Monthly Annuity ($)</label>
+                <input type="number" x-model.number="form.AMT_ANNUITY" class="input-field" placeholder="20000" min="1" required />
+              </div>
+              <div>
+                <label class="text-xs text-gray-400 mb-1 block">Goods Price ($)</label>
+                <input type="number" x-model.number="form.AMT_GOODS_PRICE" class="input-field" placeholder="350000" />
+              </div>
+            </div>
+          </div>
+
+          <!-- Employment & Age -->
+          <div>
+            <p class="text-xs text-gray-500 font-medium uppercase tracking-wider mb-3">Employment & Demographics</p>
+            <div class="grid grid-cols-2 gap-3">
+              <div>
+                <label class="text-xs text-gray-400 mb-1 block">Age (years)</label>
+                <input type="number" x-model.number="ageYears" @input="form.DAYS_BIRTH = -(ageYears * 365)" class="input-field" placeholder="35" min="18" max="70" required />
+              </div>
+              <div>
+                <label class="text-xs text-gray-400 mb-1 block">Years Employed</label>
+                <input type="number" x-model.number="yearsEmployed" @input="form.DAYS_EMPLOYED = -(yearsEmployed * 365)" class="input-field" placeholder="5" min="0" />
+              </div>
+              <div>
+                <label class="text-xs text-gray-400 mb-1 block">Gender</label>
+                <select x-model="form.CODE_GENDER" class="input-field">
+                  <option value="">Select…</option>
+                  <option value="M">Male</option>
+                  <option value="F">Female</option>
+                </select>
+              </div>
+              <div>
+                <label class="text-xs text-gray-400 mb-1 block">Family Members</label>
+                <input type="number" x-model.number="form.CNT_FAM_MEMBERS" class="input-field" placeholder="2" min="1" />
+              </div>
+            </div>
+          </div>
+
+          <!-- Credit scores -->
+          <div>
+            <p class="text-xs text-gray-500 font-medium uppercase tracking-wider mb-3">External Credit Scores <span class="text-gray-600 normal-case">(0–1)</span></p>
+            <div class="grid grid-cols-3 gap-3">
+              <div>
+                <label class="text-xs text-gray-400 mb-1 block">Score 1</label>
+                <input type="number" x-model.number="form.EXT_SOURCE_1" class="input-field" placeholder="0.50" step="0.01" min="0" max="1" />
+              </div>
+              <div>
+                <label class="text-xs text-gray-400 mb-1 block">Score 2</label>
+                <input type="number" x-model.number="form.EXT_SOURCE_2" class="input-field" placeholder="0.60" step="0.01" min="0" max="1" />
+              </div>
+              <div>
+                <label class="text-xs text-gray-400 mb-1 block">Score 3</label>
+                <input type="number" x-model.number="form.EXT_SOURCE_3" class="input-field" placeholder="0.55" step="0.01" min="0" max="1" />
+              </div>
+            </div>
+          </div>
+
+          <!-- Region -->
+          <div>
+            <label class="text-xs text-gray-400 mb-1 block">Region Credit Rating (1–3)</label>
+            <select x-model.number="form.REGION_RATING_CLIENT" class="input-field">
+              <option value="">Select…</option>
+              <option value="1">1 — Low risk region</option>
+              <option value="2">2 — Medium risk region</option>
+              <option value="3">3 — High risk region</option>
+            </select>
+          </div>
+
+          <!-- Buttons -->
+          <div class="flex gap-3 pt-2">
+            <button type="submit" class="btn-primary flex-1" :disabled="loading">
+              <span x-show="loading" class="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin"></span>
+              <span x-show="!loading">Analyse Applicant</span>
+              <span x-show="loading">Analysing…</span>
+            </button>
+          </div>
+
+          <!-- Sample profiles -->
+          <div class="pt-1 space-y-2">
+            <p class="text-xs text-gray-600 uppercase tracking-wider font-medium">Approve samples</p>
+            <div class="grid grid-cols-3 gap-1.5">
+              <template x-for="(s, i) in approveSamples" :key="i">
+                <button type="button" @click="loadSample(s)"
+                        class="px-2 py-1.5 rounded-lg text-xs font-medium border border-green-800 text-green-400 bg-green-900/20 hover:bg-green-900/40 transition-colors truncate"
+                        x-text="s.label"></button>
+              </template>
+            </div>
+            <p class="text-xs text-gray-600 uppercase tracking-wider font-medium pt-1">Reject samples</p>
+            <div class="grid grid-cols-3 gap-1.5">
+              <template x-for="(s, i) in rejectSamples" :key="i">
+                <button type="button" @click="loadSample(s)"
+                        class="px-2 py-1.5 rounded-lg text-xs font-medium border border-red-800 text-red-400 bg-red-900/20 hover:bg-red-900/40 transition-colors truncate"
+                        x-text="s.label"></button>
+              </template>
+            </div>
+          </div>
+
+          <p x-show="error" x-text="error" class="text-red-400 text-xs mt-2"></p>
+        </form>
+      </div>
+    </div>
+
+    <!-- ── Right: Results ────────────────────────────────────────────────── -->
+    <div class="xl:col-span-2 space-y-6">
+
+      <!-- Empty state -->
+      <div x-show="!result && !loading" class="card flex flex-col items-center justify-center py-20 text-center">
+        <div class="w-16 h-16 rounded-2xl bg-gray-800 flex items-center justify-center mb-4 text-3xl">🏦</div>
+        <h3 class="text-white font-semibold text-lg mb-2">Enter applicant details</h3>
+        <p class="text-gray-500 text-sm max-w-xs">Fill in the form on the left and click <em>Analyse Applicant</em> to see the credit decision with zone classification and recourse paths.</p>
+      </div>
+
+      <!-- Loading state -->
+      <div x-show="loading" class="card flex flex-col items-center justify-center py-20 text-center">
+        <div class="w-12 h-12 border-4 border-brand-500/30 border-t-brand-500 rounded-full animate-spin mb-4"></div>
+        <p class="text-white font-medium" x-text="loadingStage"></p>
+        <p class="text-gray-500 text-sm mt-1">This may take 10–30 seconds for counterfactuals</p>
+      </div>
+
+      <!-- Results -->
+      <template x-if="result && !loading">
+        <div class="space-y-6">
+
+          <!-- Zone badge -->
+          <div class="border-2 rounded-xl p-6"
+               :class="'zone-' + result.zone">
+            <div class="flex items-center justify-between flex-wrap gap-4">
+              <div>
+                <p class="text-xs font-semibold uppercase tracking-widest opacity-70 mb-1">Decision Zone</p>
+                <h2 class="text-3xl font-bold text-white" x-text="result.zone_label"></h2>
+              </div>
+              <div class="text-right">
+                <p class="text-xs opacity-70 mb-1">Default Probability</p>
+                <p class="text-4xl font-bold text-white" x-text="(result.p_default * 100).toFixed(1) + '%'"></p>
+              </div>
+            </div>
+            <div class="mt-4 progress-bar">
+              <div class="progress-fill"
+                   :style="'width: ' + (result.p_default * 100) + '%; background: ' + (result.p_default > 0.5 ? '#ef4444' : result.p_default > 0.35 ? '#f59e0b' : '#22c55e')"
+                   ></div>
+            </div>
+            <div class="flex justify-between text-xs opacity-50 mt-1">
+              <span>0% risk</span>
+              <span>50% threshold</span>
+              <span>100% risk</span>
+            </div>
+          </div>
+
+          <!-- SHAP contributions (only for grey/deny — approve needs no explanation) -->
+          <div class="card" x-show="result.zone !== 'approve' && result.shap_top_features && result.shap_top_features.length > 0">
+            <h3 class="text-sm font-semibold text-gray-400 uppercase tracking-wider mb-4">
+              Why this decision? <span class="text-gray-600 normal-case font-normal">(SHAP contributors)</span>
+            </h3>
+            <div class="space-y-3">
+              <template x-for="feat in result.shap_top_features.slice(0,6)" :key="feat.feature">
+                <div>
+                  <div class="flex items-center justify-between mb-1">
+                    <span class="text-sm text-gray-300" x-text="feat.label"></span>
+                    <span class="text-xs px-2 py-0.5 rounded-full font-medium"
+                          :class="feat.direction === 'increases_risk'
+                            ? 'text-red-400 bg-red-900/30'
+                            : 'text-green-400 bg-green-900/30'"
+                          x-text="feat.direction === 'increases_risk' ? '↑ Risk' : '↓ Risk'"></span>
+                  </div>
+                  <div class="progress-bar">
+                    <div class="progress-fill"
+                         :style="'width: ' + Math.min(Math.abs(feat.shap_value) * 300, 100) + '%; background: ' + (feat.direction === 'increases_risk' ? '#ef4444' : '#22c55e')"
+                         ></div>
+                  </div>
+                  <p class="text-xs text-gray-600 mt-0.5">Value: <span class="text-gray-400" x-text="feat.feature_value"></span></p>
+                </div>
+              </template>
+            </div>
+            <p class="text-xs text-gray-600 mt-4 border-t border-gray-800 pt-3">
+              ⚠ SHAP shows <em>why</em> the model made this prediction — not what you should do. See recourse paths below for actionable steps.
+            </p>
+          </div>
+
+          <!-- Recourse paths -->
+          <div class="card" x-show="result.recourse_available">
+            <div class="flex items-center justify-between mb-5">
+              <h3 class="text-sm font-semibold text-gray-400 uppercase tracking-wider">
+                Ranked Recourse Paths
+              </h3>
+              <span class="text-xs text-gray-600" x-text="result.paths.length + ' path(s) found'"></span>
+            </div>
+
+            <template x-for="path in result.paths" :key="path.rank">
+              <div class="mb-6 bg-gray-800/40 border border-gray-700/50 rounded-xl p-5">
+                <!-- Path header -->
+                <div class="flex items-start justify-between gap-4 mb-4">
+                  <div class="flex items-center gap-3">
+                    <div class="w-8 h-8 bg-brand-600 rounded-lg flex items-center justify-center text-white font-bold text-sm flex-shrink-0"
+                         x-text="'P' + path.rank"></div>
+                    <div>
+                      <p class="font-semibold text-white text-sm">Path <span x-text="path.rank"></span></p>
+                      <p class="text-gray-500 text-xs" x-text="path.steps.length + ' change(s) required'"></p>
+                    </div>
+                  </div>
+                  <div class="text-right">
+                    <div class="flex items-center gap-3">
+                      <div class="text-center">
+                        <p class="text-xs text-gray-500 mb-0.5">Flip Chance</p>
+                        <p class="text-lg font-bold text-green-400" x-text="(path.flip_probability * 100).toFixed(0) + '%'"></p>
+                      </div>
+                      <div class="text-center">
+                        <p class="text-xs text-gray-500 mb-0.5">Est. Time</p>
+                        <p class="text-sm font-semibold text-white" x-text="path.time_estimate"></p>
+                      </div>
+                    </div>
+                    <!-- Composite score bar -->
+                    <div class="mt-2 flex items-center gap-2">
+                      <span class="text-xs text-gray-600">Score</span>
+                      <div class="w-24 progress-bar">
+                        <div class="progress-fill bg-brand-500"
+                             :style="'width: ' + (path.composite_score * 100) + '%'"></div>
+                      </div>
+                      <span class="text-xs text-brand-400" x-text="(path.composite_score * 100).toFixed(0) + '%'"></span>
+                    </div>
+                  </div>
+                </div>
+
+                <!-- Action steps -->
+                <div class="space-y-2">
+                  <template x-for="(step, si) in path.steps" :key="si">
+                    <div class="step-card">
+                      <div class="flex items-start gap-3">
+                        <div class="w-5 h-5 rounded-full border border-brand-500/50 flex items-center justify-center text-brand-400 text-xs flex-shrink-0 mt-0.5"
+                             x-text="si + 1"></div>
+                        <div class="flex-1">
+                          <p class="text-white text-sm" x-text="step.action"></p>
+                          <div class="flex items-center gap-3 mt-1.5">
+                            <span class="text-xs text-gray-500">
+                              ⏱ <span x-text="step.time_estimate"></span>
+                            </span>
+                            <span class="text-xs"
+                                  :class="step.delta > 0 ? 'text-amber-400' : 'text-green-400'"
+                                  x-text="step.delta > 0 ? '↑ Increase' : '↓ Reduce'"></span>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  </template>
+                </div>
+              </div>
+            </template>
+          </div>
+
+          <!-- No recourse message -->
+          <div class="card text-center py-8" x-show="!result.recourse_available && result.zone !== 'approve'">
+            <p class="text-2xl mb-3">🔒</p>
+            <p class="text-white font-medium mb-1">No feasible recourse paths found</p>
+            <p class="text-gray-500 text-sm" x-text="result.message"></p>
+          </div>
+
+          <!-- Approved message -->
+          <div class="card text-center py-8" x-show="result.zone === 'approve'">
+            <p class="text-2xl mb-3">✅</p>
+            <p class="text-white font-medium mb-1">Application approved</p>
+            <p class="text-gray-500 text-sm">This applicant qualifies. No recourse needed.</p>
+          </div>
+
+        </div>
+      </template>
+
+    </div>
+  </main>
+
+  <!-- ── Footer ────────────────────────────────────────────────────────── -->
+  <footer class="border-t border-gray-800 mt-12 py-6">
+    <div class="max-w-7xl mx-auto px-6 flex items-center justify-between text-xs text-gray-600">
+      <span>Credit Recourse Engine — XGBoost + MAPIE + DiCE-ML</span>
+      <span>Home Credit Default Risk dataset • 307k applicants</span>
+    </div>
+  </footer>
+
+  <!-- ── Alpine.js app logic ────────────────────────────────────────────── -->
+  <script>
+    function creditApp() {
+      return {
+        form: {
+          AMT_INCOME_TOTAL: null,
+          AMT_CREDIT: null,
+          AMT_ANNUITY: null,
+          AMT_GOODS_PRICE: null,
+          DAYS_BIRTH: null,
+          DAYS_EMPLOYED: null,
+          EXT_SOURCE_1: null,
+          EXT_SOURCE_2: null,
+          EXT_SOURCE_3: null,
+          CODE_GENDER: '',
+          CNT_FAM_MEMBERS: null,
+          REGION_RATING_CLIENT: '',
+        },
+        ageYears: null,
+        yearsEmployed: null,
+        result: null,
+        loading: false,
+        loadingStage: 'Analysing…',
+        error: null,
+        modelStatus: 'checking',
+
+        pipelineLayers: [
+          { title: 'XGBoost Classifier', desc: 'P(default) from 300+ engineered features' },
+          { title: 'Conformal Grey Zone', desc: 'MAPIE RAPS — flags borderline decisions' },
+          { title: 'Feasibility Counterfactuals', desc: 'DiCE genetic — what you need to change' },
+          { title: 'Effort-Ranked Paths', desc: 'Ranked by flip chance × time cost' },
+        ],
+
+        async init() {
+          try {
+            const res = await fetch('/health');
+            const data = await res.json();
+            this.modelStatus = data.model_loaded ? 'loaded' : 'not_loaded';
+          } catch {
+            this.modelStatus = 'not_loaded';
+          }
+        },
+
+        async runPrediction() {
+          this.error = null;
+          this.result = null;
+          this.loading = true;
+          this.loadingStage = 'Running prediction…';
+
+          try {
+            // Build payload — filter null values
+            const payload = {};
+            for (const [k, v] of Object.entries(this.form)) {
+              if (v !== null && v !== '' && v !== undefined) payload[k] = v;
+            }
+
+            // Step 1: predict
+            const predRes = await fetch('/api/predict', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify(payload),
+            });
+
+            if (!predRes.ok) {
+              const err = await predRes.json();
+              throw new Error(err.detail || 'Prediction failed');
+            }
+
+            const pred = await predRes.json();
+
+            // Step 2: recourse (for grey/deny zones)
+            let recourse = { recourse_available: false, paths: [], message: '' };
+            if (pred.zone !== 'approve') {
+              this.loadingStage = 'Generating recourse paths…';
+              const recRes = await fetch('/api/recourse', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ applicant: payload, num_paths: 3 }),
+              });
+              if (recRes.ok) {
+                recourse = await recRes.json();
+              }
+            }
+
+            this.result = { ...pred, ...recourse };
+          } catch (e) {
+            this.error = e.message;
+          } finally {
+            this.loading = false;
+          }
+        },
+
+        approveSamples: [
+          {
+            label: '✓ Senior Prof.',
+            ageYears: 48, yearsEmployed: 14,
+            form: { AMT_INCOME_TOTAL: 270000, AMT_CREDIT: 315000, AMT_ANNUITY: 16200,
+                    AMT_GOODS_PRICE: 290000, DAYS_BIRTH: -(48*365), DAYS_EMPLOYED: -(14*365),
+                    EXT_SOURCE_1: 0.82, EXT_SOURCE_2: 0.87, EXT_SOURCE_3: 0.79,
+                    CODE_GENDER: 'F', CNT_FAM_MEMBERS: 4, REGION_RATING_CLIENT: 1 }
+          },
+          {
+            label: '✓ Mid-Career',
+            ageYears: 38, yearsEmployed: 7,
+            form: { AMT_INCOME_TOTAL: 157500, AMT_CREDIT: 225000, AMT_ANNUITY: 13500,
+                    AMT_GOODS_PRICE: 200000, DAYS_BIRTH: -(38*365), DAYS_EMPLOYED: -(7*365),
+                    EXT_SOURCE_1: 0.71, EXT_SOURCE_2: 0.76, EXT_SOURCE_3: 0.68,
+                    CODE_GENDER: 'M', CNT_FAM_MEMBERS: 3, REGION_RATING_CLIENT: 1 }
+          },
+          {
+            label: '✓ Self-Empl.',
+            ageYears: 42, yearsEmployed: 10,
+            form: { AMT_INCOME_TOTAL: 225000, AMT_CREDIT: 180000, AMT_ANNUITY: 11000,
+                    AMT_GOODS_PRICE: 165000, DAYS_BIRTH: -(42*365), DAYS_EMPLOYED: -(10*365),
+                    EXT_SOURCE_1: 0.74, EXT_SOURCE_2: 0.80, EXT_SOURCE_3: 0.73,
+                    CODE_GENDER: 'F', CNT_FAM_MEMBERS: 2, REGION_RATING_CLIENT: 2 }
+          },
+        ],
+
+        rejectSamples: [
+          {
+            label: '✗ No Credit',
+            // DENY zone — near-zero credit scores, strong denial across all bureaus
+            ageYears: 33, yearsEmployed: 1,
+            form: { AMT_INCOME_TOTAL: 112500, AMT_CREDIT: 450000, AMT_ANNUITY: 26000,
+                    AMT_GOODS_PRICE: 400000, DAYS_BIRTH: -(33*365), DAYS_EMPLOYED: -(1*365),
+                    EXT_SOURCE_1: 0.08, EXT_SOURCE_2: 0.11, EXT_SOURCE_3: 0.07,
+                    CODE_GENDER: 'M', CNT_FAM_MEMBERS: 2, REGION_RATING_CLIENT: 2 }
+          },
+          {
+            label: '✗ High DTI',
+            // GREY — credit scores moderate but loan grossly exceeds income; GOODS_TO_CREDIT_RATIO flags collateral gap
+            ageYears: 29, yearsEmployed: 2,
+            form: { AMT_INCOME_TOTAL: 67500, AMT_CREDIT: 720000, AMT_ANNUITY: 41000,
+                    AMT_GOODS_PRICE: 680000, DAYS_BIRTH: -(29*365), DAYS_EMPLOYED: -(2*365),
+                    EXT_SOURCE_1: 0.22, EXT_SOURCE_2: 0.28, EXT_SOURCE_3: 0.19,
+                    CODE_GENDER: 'M', CNT_FAM_MEMBERS: 1, REGION_RATING_CLIENT: 3 }
+          },
+          {
+            label: '✗ Annuity Crush',
+            // GREY — monthly payment exceeds income capacity; AMT_ANNUITY dominates SHAP
+            ageYears: 27, yearsEmployed: 1,
+            form: { AMT_INCOME_TOTAL: 45000, AMT_CREDIT: 360000, AMT_ANNUITY: 55000,
+                    AMT_GOODS_PRICE: 340000, DAYS_BIRTH: -(27*365), DAYS_EMPLOYED: -(1*365),
+                    EXT_SOURCE_1: 0.32, EXT_SOURCE_2: 0.36, EXT_SOURCE_3: 0.30,
+                    CODE_GENDER: 'M', CNT_FAM_MEMBERS: 1, REGION_RATING_CLIENT: 3 }
+          },
+          {
+            label: '✗ Late Starter',
+            // GREY — 58yr old with only 5 months employment; DAYS_EMPLOYED_RATIO + CODE_GENDER secondary
+            ageYears: 58, yearsEmployed: 0,
+            form: { AMT_INCOME_TOTAL: 90000, AMT_CREDIT: 360000, AMT_ANNUITY: 22000,
+                    AMT_GOODS_PRICE: 340000, DAYS_BIRTH: -(58*365), DAYS_EMPLOYED: -(0.4*365),
+                    EXT_SOURCE_1: 0.30, EXT_SOURCE_2: 0.34, EXT_SOURCE_3: 0.29,
+                    CODE_GENDER: 'F', CNT_FAM_MEMBERS: 2, REGION_RATING_CLIENT: 3 }
+          },
+          {
+            label: '✗ Young Overexp',
+            // GREY — 24yr old male, 6mo employment, modest scores; DAYS_BIRTH youth risk drives SHAP
+            ageYears: 24, yearsEmployed: 0,
+            form: { AMT_INCOME_TOTAL: 54000, AMT_CREDIT: 270000, AMT_ANNUITY: 18000,
+                    AMT_GOODS_PRICE: 250000, DAYS_BIRTH: -(24*365), DAYS_EMPLOYED: -(0.5*365),
+                    EXT_SOURCE_1: 0.20, EXT_SOURCE_2: 0.24, EXT_SOURCE_3: 0.19,
+                    CODE_GENDER: 'M', CNT_FAM_MEMBERS: 1, REGION_RATING_CLIENT: 3 }
+          },
+          {
+            label: '✗ Family Stress',
+            // GREY — 5 dependents, moderate income, high loan; AMT_ANNUITY + family burden in SHAP
+            ageYears: 44, yearsEmployed: 3,
+            form: { AMT_INCOME_TOTAL: 90000, AMT_CREDIT: 630000, AMT_ANNUITY: 36000,
+                    AMT_GOODS_PRICE: 580000, DAYS_BIRTH: -(44*365), DAYS_EMPLOYED: -(3*365),
+                    EXT_SOURCE_1: 0.18, EXT_SOURCE_2: 0.23, EXT_SOURCE_3: 0.15,
+                    CODE_GENDER: 'F', CNT_FAM_MEMBERS: 5, REGION_RATING_CLIENT: 3 }
+          },
+        ],
+
+        loadSample(s) {
+          this.ageYears      = s.ageYears;
+          this.yearsEmployed = s.yearsEmployed;
+          this.form = { ...s.form };
+          this.result = null;
+          this.error  = null;
+        },
+      }
+    }
+  </script>
+</body>
+</html>
