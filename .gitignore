@@ -43,3 +43,9 @@ htmlcov/
 
 # OS
 Thumbs.db
+
+# Docs / reports (large PDFs not needed on GitHub)
+docs/
+
+# Optuna study DB (artifact, not needed on GitHub)
+*.db

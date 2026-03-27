@@ -42,6 +42,7 @@ from backend.ml.config import (
     LABEL_ENCODERS_PATH,
     MAPIE_PATH,
     MODEL_PATH,
+    OPTUNA_STORAGE,
     OPTUNA_TIMEOUT,
     OPTUNA_TRIALS,
     RANDOM_STATE,
@@ -129,6 +130,7 @@ def main():
         X_val, y_val,
         n_trials=OPTUNA_TRIALS,
         timeout=OPTUNA_TIMEOUT,
+        storage=OPTUNA_STORAGE,
     )
     logger.info(f"Best validation AUC: {best_auc:.4f}")
 

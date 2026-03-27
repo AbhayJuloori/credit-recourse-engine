@@ -55,8 +55,9 @@ class CreditClassifier:
         y_train: pd.Series,
         X_val: pd.DataFrame,
         y_val: pd.Series,
-        n_trials: int = 60,
-        timeout: Optional[int] = 3600,
+        n_trials: int = 100,
+        timeout: Optional[int] = None,
+        storage: Optional[str] = None,
     ) -> float:
         """
         Run Optuna hyperparameter search then retrain on full train+val set
@@ -108,11 +109,23 @@ class CreditClassifier:
             preds = mdl.predict_proba(X_val)[:, 1]
             return roc_auc_score(y_val, preds)
 
-        study = optuna.create_study(
+        # Use SQLite storage if provided — enables resume if interrupted
+        study_kwargs = dict(
+            study_name="credit_risk",
             direction="maximize",
             sampler=optuna.samplers.TPESampler(seed=self.random_state),
+            load_if_exists=True,
         )
-        study.optimize(objective, n_trials=n_trials, timeout=timeout, show_progress_bar=True)
+        if storage:
+            study_kwargs["storage"] = f"sqlite:///{storage}"
+
+        study = optuna.create_study(**study_kwargs)
+        completed = len([t for t in study.trials if t.state == optuna.trial.TrialState.COMPLETE])
+        remaining = max(0, n_trials - completed)
+        if completed:
+            logger.info(f"Resuming study — {completed} trials already done, {remaining} remaining.")
+
+        study.optimize(objective, n_trials=remaining, timeout=timeout, show_progress_bar=True)
 
         self.best_params = study.best_params
         self.val_auc = study.best_value

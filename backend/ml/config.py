@@ -30,7 +30,10 @@ RANDOM_STATE = 42
 TEST_SIZE = 0.15       # 15% test hold-out
 CALIBRATION_SIZE = 0.15  # 15% for MAPIE calibration
 OPTUNA_TRIALS = 100
-OPTUNA_TIMEOUT = 7200  # 2 hour max
+OPTUNA_TIMEOUT = None   # No timeout — run all 100 trials
+
+# Optuna SQLite storage — persists study so it can be resumed if interrupted
+OPTUNA_STORAGE = str(ARTIFACTS_DIR / "optuna_study.db")
 
 # ── Conformal prediction ─────────────────────────────────────────────────────
 CONFORMAL_ALPHA = 0.10   # 90% coverage
