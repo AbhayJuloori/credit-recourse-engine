@@ -10,7 +10,7 @@ app_port: 7860
 
 # Credit Recourse Engine
 
-> Most credit risk models tell you *who* will default. This project tells a denied applicant *what to change* — and ranks those changes by effort and success probability.
+> Most credit risk models tell you *who* will default. This project tells a denied applicant *what to change*, and ranks those changes by effort and success probability.
 
 ---
 
@@ -38,7 +38,7 @@ This project builds the missing layers.
 
         ↓
 
-[2] Conformal Grey Zone — MAPIE RAPS
+[2] Conformal Grey Zone: MAPIE RAPS
     Wraps the classifier in a conformal predictor.
     Each application gets: Approve / Grey Zone / Deny.
     Grey Zone = model confidence is too low to auto-deny. Treat differently.
@@ -46,7 +46,7 @@ This project builds the missing layers.
 
         ↓
 
-[3] Feasibility-Constrained Counterfactuals — DiCE-ML
+[3] Feasibility-Constrained Counterfactuals: DiCE-ML
     For grey-zone and denied applicants only.
     Generates recourse paths with:
       - Immutable features locked (age, gender, history)
@@ -56,7 +56,7 @@ This project builds the missing layers.
 
         ↓
 
-[4] Effort-Ranked Pathways — the decision layer
+[4] Effort-Ranked Pathways: the decision layer
     Ranks counterfactual paths by:
       score = (flip_probability × 0.5) + (1 / (1 + effort) × 0.5)
     where:
@@ -168,7 +168,7 @@ Six tables aggregated per applicant:
 | credit_card_balance | 3.8M | ~20 aggregations |
 | installments_payments | 13.6M | ~25 aggregations |
 
-**Total: ~300 features** — compared to 122 using application only.
+**Total: ~300 features**, compared to 122 using application only.
 
 ---
 
@@ -238,9 +238,9 @@ Response:
 ### Hugging Face Spaces
 
 1. Train locally, commit artifacts to the repo (use Git LFS for `.pkl` files)
-2. Create a Space at [huggingface.co/spaces](https://huggingface.co/spaces) — **Docker** type
+2. Create a Space at [huggingface.co/spaces](https://huggingface.co/spaces), **Docker** type
 3. Push: the `Dockerfile` is already configured for HF Spaces (port 7860)
-4. Get a permanent public URL — paste on LinkedIn
+4. Get a permanent public URL
 
 ### Local network sharing
 
@@ -255,9 +255,9 @@ make serve-prod
 
 ```
 backend/tests/
-├── test_effort_ranker.py    # 15 tests — ranking logic, effort computation
-├── test_constraints.py      # 16 tests — feature bounds, immutability, time weights
-└── test_api.py              # 8 tests  — endpoint validation, error handling
+├── test_effort_ranker.py    # 15 tests: ranking logic, effort computation
+├── test_constraints.py      # 16 tests: feature bounds, immutability, time weights
+└── test_api.py              # 8 tests : endpoint validation, error handling
 ```
 
 Having tests at all puts you in the top 5% of DS portfolio projects.
